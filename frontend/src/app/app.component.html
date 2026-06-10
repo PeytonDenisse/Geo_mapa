@@ -1,0 +1,420 @@
+<main *ngIf="!session" class="auth-page">
+  <section class="auth-panel">
+    <div>
+      <p class="eyebrow">Proyecto final georeferenciados</p>
+      <h1>Reportes Urbanos</h1>
+      <p class="muted">
+        Sistema de reporte de baches, alumbrado, basura y señalizacion
+        para centralizar problemas de la ciudad con MongoDB.
+      </p>
+    </div>
+
+    <form class="form-card" #authNgForm="ngForm" (ngSubmit)="authNgForm.valid && submitAuth()">
+      <div class="segmented">
+        <button type="button" [class.active]="authMode === 'login'" (click)="authMode = 'login'">Login</button>
+        <button type="button" [class.active]="authMode === 'register'" (click)="authMode = 'register'">Registro</button>
+      </div>
+
+      <label *ngIf="authMode === 'register'">
+        Nombre
+        <input name="name" [(ngModel)]="authForm.name" required>
+      </label>
+
+      <label>
+        Correo
+        <input type="email" name="email" [(ngModel)]="authForm.email" required>
+      </label>
+
+      <label>
+        Password
+        <input type="password" name="password" [(ngModel)]="authForm.password" minlength="6" required>
+        <small class="muted">Minimo 6 caracteres.</small>
+      </label>
+
+      <p class="error-text" *ngIf="error">{{ error }}</p>
+      <button class="primary-btn" [disabled]="loading || authNgForm.invalid">
+        {{ loading ? "Procesando..." : authMode === "login" ? "Entrar" : "Crear cuenta" }}
+      </button>
+    </form>
+  </section>
+</main>
+
+<main *ngIf="session" class="app-shell">
+  <header class="topbar">
+    <div>
+      <p class="eyebrow">Sistema de Reporte de Baches y Problemas Urbanos</p>
+      <h1>Reportes Urbanos</h1>
+    </div>
+    <div class="user-area">
+      <span>{{ session.user.name }}</span>
+      <button class="ghost-btn" (click)="logout()">Salir</button>
+    </div>
+  </header>
+
+  <nav class="tabs">
+    <button [class.active]="activeView === 'principal'" (click)="switchView('principal')">Principal</button>
+    <button [class.active]="activeView === 'catalogos'" (click)="switchView('catalogos')">Reportes y categorias</button>
+  </nav>
+
+  <p class="error-banner" *ngIf="error">{{ error }}</p>
+
+  <ng-container *ngIf="activeView === 'principal'">
+    <section class="stats-grid">
+      <div class="stat"><strong>{{ locations.length }}</strong><span>Problemas ubicados</span></div>
+      <div class="stat"><strong>{{ zones.length }}</strong><span>Colonias afectadas</span></div>
+      <div class="stat"><strong>{{ routes.length }}</strong><span>Rutas urbanas</span></div>
+      <div class="stat"><strong>{{ reports.length }}</strong><span>Reportes</span></div>
+    </section>
+
+    <section class="map-layout">
+      <div class="map-toolbar">
+        <button class="secondary-btn" type="button" (click)="startZoneDrawing()">Delimitar colonia afectada</button>
+        <button class="secondary-btn route-btn" type="button" (click)="startRouteDrawing()">Trazar ruta afectada</button>
+
+        <ng-container *ngIf="drawingMode === 'zone'">
+          <input placeholder="Nombre de colonia" [(ngModel)]="zoneForm.name" name="zoneName">
+          <input placeholder="Descripcion de afectacion" [(ngModel)]="zoneForm.description" name="zoneDescription">
+          <select [(ngModel)]="zoneForm.category" name="zoneCategory" (ngModelChange)="renderDraftLayer()">
+            <option value="">Sin categoria</option>
+            <option *ngFor="let category of categories" [value]="category._id">{{ category.name }}</option>
+          </select>
+          <button class="primary-btn" type="button" (click)="saveZone()">
+            {{ editingZoneId ? "Actualizar colonia" : "Guardar colonia" }}
+          </button>
+          <button class="ghost-btn" type="button" (click)="cancelZoneDrawing()">Cancelar</button>
+          <span class="status-pill">{{ draftPoints.length }} puntos</span>
+        </ng-container>
+
+        <ng-container *ngIf="drawingMode === 'route'">
+          <input placeholder="Nombre de ruta o calle" [(ngModel)]="routeForm.name" name="routeName">
+          <input placeholder="Descripcion del tramo afectado" [(ngModel)]="routeForm.description" name="routeDescription">
+          <select [(ngModel)]="routeForm.category" name="routeCategory" (ngModelChange)="renderDraftLayer()">
+            <option value="">Sin categoria</option>
+            <option *ngFor="let category of categories" [value]="category._id">{{ category.name }}</option>
+          </select>
+          <button class="primary-btn" type="button" (click)="saveRoute()">
+            {{ editingRouteId ? "Actualizar ruta" : "Guardar ruta" }}
+          </button>
+          <button class="ghost-btn" type="button" (click)="cancelRouteDrawing()">Cancelar</button>
+          <span class="status-pill">{{ draftPoints.length }} puntos</span>
+        </ng-container>
+      </div>
+      <div class="map-grid">
+        <aside class="location-card">
+          <h2>Marcar problema urbano</h2>
+          <p class="muted">Haz clic en el mapa para marcar la ubicacion exacta del bache o problema urbano.</p>
+
+          <div class="coordinate-card">
+            <div>
+              <span>Latitud</span>
+              <strong>Clic en mapa</strong>
+            </div>
+            <div>
+              <span>Longitud</span>
+              <strong>Clic en mapa</strong>
+            </div>
+          </div>
+
+          <div class="helper-list">
+            <span>Reportes cercanos</span>
+            <span>Tabla en tiempo real</span>
+            <span>Colonias afectadas</span>
+            <span>Rutas y calles afectadas</span>
+          </div>
+        </aside>
+        <div id="map" class="map-canvas"></div>
+      </div>
+    </section>
+
+    <section class="panel">
+      <div class="section-header">
+        <div>
+          <h2>Problemas ubicados en el mapa</h2>
+          <p class="muted">La tabla se actualiza despues de cada cambio hecho en los popups del mapa.</p>
+        </div>
+        <span class="count-badge">{{ locations.length }} problemas</span>
+        <form class="search-form" (ngSubmit)="searchLocations()">
+          <input name="searchName" [(ngModel)]="searchName" placeholder="Buscar problema por nombre">
+          <button class="secondary-btn">Buscar</button>
+        </form>
+      </div>
+
+      <div class="search-results" *ngIf="searchResults.length > 0">
+        <strong>Resultados:</strong>
+        <button
+          class="result-chip"
+          type="button"
+          *ngFor="let location of searchResults"
+          (click)="focusLocation(location)">
+          {{ location.name }} | {{ location.latitude | number:"1.5-5" }}, {{ location.longitude | number:"1.5-5" }}
+        </button>
+      </div>
+
+      <div class="table-wrapper">
+        <table>
+          <thead>
+            <tr>
+              <th>Nombre</th>
+              <th>Categoria</th>
+              <th>Descripcion</th>
+              <th>Latitud</th>
+              <th>Longitud</th>
+              <th>Reportes</th>
+              <th>Accion</th>
+            </tr>
+          </thead>
+          <tbody>
+            <tr *ngIf="locations.length === 0">
+              <td colspan="7" class="empty-cell">Sin problemas registrados.</td>
+            </tr>
+            <tr *ngFor="let location of locations">
+              <td>{{ location.name }}</td>
+              <td>
+                <span class="color-dot" [style.background]="location.category?.color || '#60a5fa'"></span>
+                {{ getCategoryName(location.category) }}
+              </td>
+              <td>{{ location.description }}</td>
+              <td>{{ location.latitude | number:"1.6-6" }}</td>
+              <td>{{ location.longitude | number:"1.6-6" }}</td>
+              <td>{{ getReportsForTarget("location", location._id).length }}</td>
+              <td>
+                <div class="table-actions">
+                  <button class="table-btn" type="button" (click)="focusLocation(location)">Ver en mapa</button>
+                  <button class="table-btn" type="button" (click)="loadNearbyReports(location)">Ver cercanos</button>
+                </div>
+              </td>
+            </tr>
+          </tbody>
+        </table>
+      </div>
+
+      <div class="nearby-panel" *ngIf="nearbyReports.length > 0">
+        <h3>Reportes cercanos en un radio de 2 km</h3>
+        <div class="nearby-card" *ngFor="let item of nearbyReports">
+          <strong>{{ item.report.title }}</strong>
+          <span>{{ item.report.category.name }} | {{ item.report.status }} | {{ item.distanceKm | number:"1.2-2" }} km</span>
+        </div>
+      </div>
+    </section>
+
+    <section class="panel">
+      <div class="section-header">
+        <div>
+          <h2>CRUD de zonas y rutas</h2>
+          <p class="muted">Administra colonias afectadas y rutas urbanas trazadas sobre el mapa.</p>
+        </div>
+      </div>
+
+      <div class="catalog-grid">
+        <div>
+          <h3 class="subheading">Zonas / colonias afectadas</h3>
+          <div class="table-wrapper">
+            <table>
+              <thead>
+                <tr>
+                  <th>Nombre</th>
+                  <th>Categoria</th>
+                  <th>Descripcion</th>
+                  <th>Puntos</th>
+                  <th>Reportes</th>
+                  <th>Acciones</th>
+                </tr>
+              </thead>
+              <tbody>
+                <tr *ngIf="zones.length === 0">
+                  <td colspan="6" class="empty-cell">Sin colonias delimitadas.</td>
+                </tr>
+                <tr *ngFor="let zone of zones">
+                  <td>{{ zone.name }}</td>
+                  <td>
+                    <span class="color-dot" [style.background]="zone.category?.color || '#2563eb'"></span>
+                    {{ getCategoryName(zone.category) }}
+                  </td>
+                  <td>{{ zone.description }}</td>
+                  <td>{{ zone.points.length }}</td>
+                  <td>{{ getReportsForTarget("zone", zone._id).length }}</td>
+                  <td>
+                    <div class="table-actions">
+                      <button class="table-btn" type="button" (click)="focusZone(zone)">Ver en mapa</button>
+                      <button class="table-btn" type="button" (click)="editZone(zone)">Editar forma</button>
+                      <button class="table-btn danger" type="button" (click)="deleteZone(zone._id)">Eliminar</button>
+                    </div>
+                  </td>
+                </tr>
+              </tbody>
+            </table>
+          </div>
+        </div>
+
+        <div>
+          <h3 class="subheading">Rutas / calles afectadas</h3>
+          <div class="table-wrapper">
+            <table>
+              <thead>
+                <tr>
+                  <th>Nombre</th>
+                  <th>Categoria</th>
+                  <th>Descripcion</th>
+                  <th>Puntos</th>
+                  <th>Reportes</th>
+                  <th>Acciones</th>
+                </tr>
+              </thead>
+              <tbody>
+                <tr *ngIf="routes.length === 0">
+                  <td colspan="6" class="empty-cell">Sin rutas trazadas.</td>
+                </tr>
+                <tr *ngFor="let route of routes">
+                  <td>{{ route.name }}</td>
+                  <td>
+                    <span class="color-dot" [style.background]="route.category?.color || '#f97316'"></span>
+                    {{ getCategoryName(route.category) }}
+                  </td>
+                  <td>{{ route.description }}</td>
+                  <td>{{ route.points.length }}</td>
+                  <td>{{ getReportsForTarget("route", route._id).length }}</td>
+                  <td>
+                    <div class="table-actions">
+                      <button class="table-btn" type="button" (click)="focusRoute(route)">Ver en mapa</button>
+                      <button class="table-btn" type="button" (click)="editRoute(route)">Editar trazo</button>
+                      <button class="table-btn danger" type="button" (click)="deleteRoute(route._id)">Eliminar</button>
+                    </div>
+                  </td>
+                </tr>
+              </tbody>
+            </table>
+          </div>
+        </div>
+      </div>
+    </section>
+  </ng-container>
+
+  <ng-container *ngIf="activeView === 'catalogos'">
+    <div class="catalog-grid">
+      <section class="panel">
+        <h2>CRUD de reportes urbanos</h2>
+        <form class="stack-form" (ngSubmit)="saveReport()">
+          <input name="reportTitle" placeholder="Ej. Bache profundo en avenida" [(ngModel)]="reportForm.title" required>
+          <textarea name="reportDescription" placeholder="Describe el problema urbano" [(ngModel)]="reportForm.description" required></textarea>
+
+          <div class="two-cols">
+            <select name="reportCategory" [(ngModel)]="reportForm.category" required>
+              <option value="">Categoria</option>
+              <option *ngFor="let category of categories" [value]="category._id">{{ category.name }}</option>
+            </select>
+            <select name="reportPriority" [(ngModel)]="reportForm.priority">
+              <option value="baja">Baja</option>
+              <option value="media">Media</option>
+              <option value="alta">Alta</option>
+            </select>
+          </div>
+
+          <div class="two-cols">
+            <select name="reportStatus" [(ngModel)]="reportForm.status">
+              <option value="pendiente">Pendiente</option>
+              <option value="en_proceso">En proceso</option>
+              <option value="resuelto">Resuelto</option>
+            </select>
+            <select name="reportTargetType" [(ngModel)]="reportForm.targetType" (ngModelChange)="onReportTargetTypeChange()">
+              <option value="location">Ubicacion exacta</option>
+              <option value="zone">Zona / colonia</option>
+              <option value="route">Ruta / calle</option>
+            </select>
+          </div>
+
+          <div class="two-cols">
+            <select name="reportTargetId" [(ngModel)]="reportForm.targetId" required>
+              <option value="">{{ getReportTargetPlaceholder() }}</option>
+              <option *ngFor="let target of getReportTargetOptions()" [value]="target._id">{{ target.name }}</option>
+            </select>
+          </div>
+
+          <div class="row-actions">
+            <button class="primary-btn">{{ editingReportId ? "Actualizar" : "Crear reporte" }}</button>
+            <button class="ghost-btn" type="button" *ngIf="editingReportId" (click)="resetReportForm()">Cancelar</button>
+          </div>
+        </form>
+
+        <div class="table-wrapper">
+          <table>
+            <thead>
+              <tr>
+                <th>Titulo</th>
+                <th>Categoria</th>
+                <th>Tipo</th>
+                <th>Prioridad</th>
+                <th>Estado</th>
+                <th>Destino</th>
+                <th>Acciones</th>
+              </tr>
+            </thead>
+            <tbody>
+              <tr *ngFor="let report of reports">
+                <td>{{ report.title }}</td>
+                <td>{{ report.category.name }}</td>
+                <td>{{ getReportTargetTypeLabel(report) }}</td>
+                <td>{{ report.priority }}</td>
+                <td>{{ report.status }}</td>
+                <td>{{ getReportTargetLabel(report) }}</td>
+                <td>
+                  <div class="table-actions">
+                    <button class="table-btn" type="button" (click)="editReport(report)">Editar</button>
+                    <button class="table-btn danger" type="button" (click)="deleteReport(report._id)">Eliminar</button>
+                  </div>
+                </td>
+              </tr>
+            </tbody>
+          </table>
+        </div>
+      </section>
+
+      <section class="panel">
+        <h2>CRUD de categorias</h2>
+        <form class="stack-form" (ngSubmit)="saveCategory()">
+          <input name="categoryName" placeholder="Bache, Alumbrado, Basura..." [(ngModel)]="categoryForm.name" required>
+          <div class="two-cols">
+            <input type="color" name="categoryColor" [(ngModel)]="categoryForm.color">
+            <select name="categoryActive" [(ngModel)]="categoryForm.active">
+              <option [ngValue]="true">Activa</option>
+              <option [ngValue]="false">Inactiva</option>
+            </select>
+          </div>
+          <textarea name="categoryDescription" placeholder="Descripcion de la categoria" [(ngModel)]="categoryForm.description"></textarea>
+
+          <div class="row-actions">
+            <button class="primary-btn">{{ editingCategoryId ? "Actualizar" : "Crear categoria" }}</button>
+            <button class="ghost-btn" type="button" *ngIf="editingCategoryId" (click)="resetCategoryForm()">Cancelar</button>
+          </div>
+        </form>
+
+        <div class="table-wrapper">
+          <table>
+            <thead>
+              <tr>
+                <th>Nombre</th>
+                <th>Color</th>
+                <th>Estado</th>
+                <th>Descripcion</th>
+                <th>Acciones</th>
+              </tr>
+            </thead>
+            <tbody>
+              <tr *ngFor="let category of categories">
+                <td>{{ category.name }}</td>
+                <td><span class="color-dot" [style.background]="category.color"></span>{{ category.color }}</td>
+                <td>{{ category.active ? "Activa" : "Inactiva" }}</td>
+                <td>{{ category.description }}</td>
+                <td>
+                  <div class="table-actions">
+                    <button class="table-btn" type="button" (click)="editCategory(category)">Editar</button>
+                    <button class="table-btn danger" type="button" (click)="deleteCategory(category._id)">Eliminar</button>
+                  </div>
+                </td>
+              </tr>
+            </tbody>
+          </table>
+        </div>
+      </section>
+    </div>
+  </ng-container>
+</main>
