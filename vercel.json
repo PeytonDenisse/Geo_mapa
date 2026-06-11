@@ -1,13 +1,23 @@
 {
-  "experimentalServices": {
-    "frontend": {
-      "root": "frontend",
-      "routePrefix": "/",
-      "framework": "angular"
+  "version": 2,
+  "buildCommand": "npm run vercel-build",
+  "outputDirectory": "frontend/dist/geo-apoyo-angular/browser",
+  "rewrites": [
+    {
+      "source": "/api/(.*)",
+      "destination": "/api/index.js"
     },
-    "backend": {
-      "root": "backend",
-      "routePrefix": "/api"
+    {
+      "source": "/api-docs/(.*)",
+      "destination": "/api/index.js"
+    },
+    {
+      "source": "/api-docs.json",
+      "destination": "/api/index.js"
+    },
+    {
+      "source": "/(.*)",
+      "destination": "/index.html"
     }
-  }
+  ]
 }
