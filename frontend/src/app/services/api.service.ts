@@ -8,9 +8,17 @@ import { CategoryItem, LocationItem, NearbyReportItem, ReportItem, RouteItem, Se
   providedIn: "root"
 })
 export class ApiService {
-  private apiUrl = environment.apiUrl;
+  private apiUrl = environment.apiUrl || this.resolveApiUrl();
 
   constructor(private http: HttpClient) {}
+
+  private resolveApiUrl(): string {
+    if (typeof window !== "undefined" && window.location.hostname === "localhost") {
+      return "http://localhost:4000/api";
+    }
+
+    return "/api";
+  }
 
   register(data: { name: string; email: string; password: string }): Observable<Session> {
     return this.http.post<Session>(`${this.apiUrl}/auth/register`, data);
