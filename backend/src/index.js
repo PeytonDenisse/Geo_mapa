@@ -7,7 +7,6 @@ require("dotenv").config({
 
 const connectDB = require("./config/db");
 const routerApi = require("./routes");
-const swaggerUi = require("swagger-ui-express");
 const swaggerSpec = require("./swagger");
 const { errorHandler, notFound } = require("./middlewares/errorHandler");
 
@@ -83,14 +82,45 @@ app.get(["/api-docs.json", "/api/api-docs.json"], (req, res) => {
   res.json(swaggerSpec);
 });
 
-const swaggerHandler = swaggerUi.setup(swaggerSpec, {
-  explorer: true,
-  swaggerOptions: {
-    persistAuthorization: true
-  }
-});
+function swaggerPage(req, res) {
+  const specUrl = req.path.startsWith("/api/api-docs") ? "/api/api-docs.json" : "/api-docs.json";
 
-app.use(["/api-docs", "/api/api-docs"], swaggerUi.serve, swaggerHandler);
+  res.type("html").send(`<!doctype html>
+<html lang="es">
+  <head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>Reportes Urbanos API Docs</title>
+    <link rel="stylesheet" href="https://unpkg.com/swagger-ui-dist@5/swagger-ui.css">
+    <style>
+      body { margin: 0; background: #ffffff; }
+      .swagger-ui .topbar { display: none; }
+    </style>
+  </head>
+  <body>
+    <div id="swagger-ui"></div>
+    <script src="https://unpkg.com/swagger-ui-dist@5/swagger-ui-bundle.js"></script>
+    <script src="https://unpkg.com/swagger-ui-dist@5/swagger-ui-standalone-preset.js"></script>
+    <script>
+      window.onload = function () {
+        window.ui = SwaggerUIBundle({
+          url: "${specUrl}",
+          dom_id: "#swagger-ui",
+          deepLinking: true,
+          presets: [
+            SwaggerUIBundle.presets.apis,
+            SwaggerUIStandalonePreset
+          ],
+          layout: "StandaloneLayout",
+          persistAuthorization: true
+        });
+      };
+    </script>
+  </body>
+</html>`);
+}
+
+app.get(["/api-docs", "/api-docs/", "/api/api-docs", "/api/api-docs/"], swaggerPage);
 
 routerApi(app);
 
