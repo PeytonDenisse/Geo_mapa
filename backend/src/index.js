@@ -51,7 +51,15 @@ function ensureDatabase() {
 
 app.use(async (req, res, next) => {
   try {
-    if (req.path.startsWith("/api")) {
+    const isApiRoute = req.path === "/api" || req.path.startsWith("/api/");
+    const isSwaggerRoute = req.path === "/api-docs"
+      || req.path.startsWith("/api-docs/")
+      || req.path === "/api-docs.json"
+      || req.path === "/api/api-docs"
+      || req.path.startsWith("/api/api-docs/")
+      || req.path === "/api/api-docs.json";
+
+    if (isApiRoute && !isSwaggerRoute) {
       await ensureDatabase();
     }
     next();
