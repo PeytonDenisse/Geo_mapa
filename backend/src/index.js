@@ -60,25 +60,30 @@ app.use(async (req, res, next) => {
   }
 });
 
-app.get("/", (req, res) => {
+function apiStatus(req, res) {
   res.json({
     name: "Reportes Urbanos API",
     status: "ok",
     endpoints: ["/api/auth", "/api/locations", "/api/zones", "/api/routes", "/api/reports", "/api/categories"],
     docs: "/api-docs"
   });
-});
+}
 
-app.get("/api-docs.json", (req, res) => {
+app.get("/", apiStatus);
+app.get("/api", apiStatus);
+
+app.get(["/api-docs.json", "/api/api-docs.json"], (req, res) => {
   res.json(swaggerSpec);
 });
 
-app.use("/api-docs", swaggerUi.serve, swaggerUi.setup(swaggerSpec, {
+const swaggerHandler = swaggerUi.setup(swaggerSpec, {
   explorer: true,
   swaggerOptions: {
     persistAuthorization: true
   }
-}));
+});
+
+app.use(["/api-docs", "/api/api-docs"], swaggerUi.serve, swaggerHandler);
 
 routerApi(app);
 
